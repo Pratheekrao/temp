@@ -1,35 +1,93 @@
-<!-- public/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Distributed File Sharing</title>
+    <title>P2P Distributed File Sharing with Peer Management</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .node-info { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .peer-management { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
         .upload-area { border: 2px dashed #ccc; padding: 40px; text-align: center; margin: 20px 0; }
         .file-list { margin: 20px 0; }
-        .file-item { padding: 10px; border: 1px solid #ddd; margin: 5px 0; display: flex; justify-content: space-between; }
-        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+        .file-item { padding: 15px; border: 1px solid #ddd; margin: 10px 0; border-radius: 5px; }
+        .file-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .file-info { flex-grow: 1; }
+        .file-actions { display: flex; gap: 10px; }
+        .chunk-info { font-size: 12px; color: #666; margin-top: 5px; }
+        .peer-item-detailed { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 10px; 
+            margin: 5px 0; 
+            background: white; 
+            border-radius: 5px; 
+            border: 1px solid #ddd;
+        }
+        .peer-info-detailed { flex-grow: 1; }
+        .peer-actions { display: flex; gap: 5px; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; }
+        input[type="text"] { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-info { background-color: #17a2b8; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        .btn-small { padding: 4px 8px; font-size: 12px; }
         .status { padding: 10px; margin: 10px 0; border-radius: 4px; }
         .success { background-color: #d4edda; color: #155724; }
         .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .video-container { margin-top: 15px; }
+        .video-player { width: 100%; max-width: 600px; height: auto; }
+        .video-badge { background-color: #e74c3c; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+        .uploader-badge { background-color: #6c757d; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin-left: 5px; }
+        .peer-list { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+        .peer-item { background: #007bff; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; }
+        .peer-offline { background: #6c757d; }
+        .files-count { color: #666; font-size: 12px; }
+        .file-type { font-weight: bold; color: #666; }
     </style>
 </head>
 <body>
-    <h1>Distributed File Sharing System</h1>
+    <div class="header">
+        <h1>P2P Distributed File Sharing Network</h1>
+        <p>Each computer is both a client and server in this peer-to-peer network with dynamic peer management</p>
+    </div>
+    
+    <div class="node-info">
+        <h3>This Node Information</h3>
+        <div id="nodeInfo">Loading...</div>
+    </div>
+
+    <div class="peer-management">
+        <h3>Peer Network Management</h3>
+        
+        <div style="margin-bottom: 15px;">
+            <input type="text" id="peerUrl" placeholder="http://192.168.1.100:3001" style="width: 300px;">
+            <input type="text" id="peerName" placeholder="Peer Name (optional)" style="width: 150px;">
+            <button class="btn-primary" onclick="connectToPeer()">Connect</button>
+            <button class="btn-info" onclick="refreshPeers()">Refresh</button>
+            <button class="btn-danger" onclick="disconnectAll()">Disconnect All</button>
+        </div>
+        
+        <div id="peersList"></div>
+    </div>
     
     <div class="upload-area" id="uploadArea">
         <p>Drag and drop files here or click to select</p>
+        <p><small>Files will be distributed across all connected peers</small></p>
         <input type="file" id="fileInput" multiple style="display: none;">
     </div>
     
     <div id="status"></div>
     
     <div class="file-list">
-        <h2>Available Files</h2>
+        <h2>Network Files</h2>
         <div id="filesList"></div>
-        <button onclick="refreshFiles()">Refresh Files</button>
+        <button class="btn-primary" onclick="refreshFiles()">Refresh Files</button>
     </div>
 
     <script>
@@ -37,6 +95,9 @@
         const fileInput = document.getElementById('fileInput');
         const status = document.getElementById('status');
         const filesList = document.getElementById('filesList');
+        const nodeInfo = document.getElementById('nodeInfo');
+        const peersList = document.getElementById('peersList');
+        let thisNode = null;
 
         uploadArea.addEventListener('click', () => fileInput.click());
         uploadArea.addEventListener('dragover', (e) => e.preventDefault());
@@ -66,7 +127,7 @@
             formData.append('file', file);
 
             try {
-                showStatus(`Uploading ${file.name}...`, 'info');
+                showStatus(`Uploading and distributing ${file.name}...`, 'info');
                 const response = await fetch('/upload', {
                     method: 'POST',
                     body: formData
@@ -74,13 +135,132 @@
 
                 const result = await response.json();
                 if (response.ok) {
-                    showStatus(`${file.name} uploaded successfully!`, 'success');
+                    showStatus(`${file.name} uploaded and distributed successfully!`, 'success');
                 } else {
                     showStatus(`Upload failed: ${result.error}`, 'error');
                 }
             } catch (error) {
                 showStatus(`Upload error: ${error.message}`, 'error');
             }
+        }
+
+        async function connectToPeer() {
+            const peerUrl = document.getElementById('peerUrl').value.trim();
+            const peerName = document.getElementById('peerName').value.trim();
+            
+            if (!peerUrl) {
+                showStatus('Please enter a peer URL', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/connect-peer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ peerUrl, peerName })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    showStatus(`Connected to peer successfully!`, 'success');
+                    document.getElementById('peerUrl').value = '';
+                    document.getElementById('peerName').value = '';
+                    refreshPeers();
+                    refreshFiles();
+                } else {
+                    showStatus(`Connection failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`Connection error: ${error.message}`, 'error');
+            }
+        }
+
+        async function removePeer(peerUrl, peerName) {
+            if (!confirm(`Are you sure you want to remove peer "${peerName}"? This will hide all files uploaded by this peer.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/remove-peer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ peerUrl })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    showStatus(`Peer removed successfully. Hidden ${result.removedFiles} files.`, 'success');
+                    refreshPeers();
+                    refreshFiles();
+                } else {
+                    showStatus(`Failed to remove peer: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`Error removing peer: ${error.message}`, 'error');
+            }
+        }
+
+        async function disconnectAll() {
+            if (!confirm('Are you sure you want to disconnect from all peers? This will hide all files from other peers.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/disconnect-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    showStatus(`${result.message}`, 'success');
+                    refreshPeers();
+                    refreshFiles();
+                } else {
+                    showStatus(`Failed to disconnect: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`Error disconnecting: ${error.message}`, 'error');
+            }
+        }
+
+        async function refreshPeers() {
+            try {
+                const response = await fetch('/peer-status');
+                const data = await response.json();
+                thisNode = data.thisNode;
+                displayPeersDetailed(data.peers, data.thisNode, data.totalFiles);
+            } catch (error) {
+                showStatus(`Failed to load peers: ${error.message}`, 'error');
+            }
+        }
+
+        function displayPeersDetailed(peers, thisNode, totalFiles) {
+            nodeInfo.innerHTML = `
+                <strong>Node Name:</strong> ${thisNode.name}<br>
+                <strong>Node URL:</strong> ${thisNode.url}<br>
+                <strong>Local Files:</strong> ${thisNode.filesCount} | <strong>Total Network Files:</strong> ${totalFiles}
+            `;
+
+            if (peers.length === 0) {
+                peersList.innerHTML = '<p>No connected peers. Enter a peer URL above to connect.</p>';
+                return;
+            }
+
+            peersList.innerHTML = `
+                <h4>Connected Peers (${peers.length}):</h4>
+                ${peers.map(peer => `
+                    <div class="peer-item-detailed">
+                        <div class="peer-info-detailed">
+                            <strong>${peer.name}</strong> (${peer.url})<br>
+                            <span class="files-count">Files: ${peer.filesCount} | Status: ${peer.active ? '🟢 Online' : '🔴 Offline'}</span>
+                        </div>
+                        <div class="peer-actions">
+                            <button class="btn-danger btn-small" onclick="removePeer('${peer.url}', '${peer.name}')">Remove</button>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
         }
 
         async function refreshFiles() {
@@ -94,16 +274,65 @@
         }
 
         function displayFiles(files) {
-            filesList.innerHTML = files.map(file => `
-                <div class="file-item">
-                    <div>
-                        <strong>${file.originalName}</strong><br>
-                        <small>Size: ${formatBytes(file.size)} | Uploaded: ${new Date(file.uploadTime).toLocaleString()}</small><br>
-                        <small>Chunks: ${file.totalChunks} | File ID: ${file.id}</small>
+            if (files.length === 0) {
+                filesList.innerHTML = '<p>No files in the network yet. Upload some files or connect to peers to see their files!</p>';
+                return;
+            }
+
+            filesList.innerHTML = files.map(file => {
+                const isVideo = file.isVideo;
+                const fileTypeDisplay = isVideo ? 
+                    `<span class="video-badge">VIDEO</span>` : 
+                    `<span class="file-type">${getFileExtension(file.originalName).toUpperCase()}</span>`;
+                
+                const chunkDistribution = file.chunks.map(chunk => 
+                    `Chunk ${chunk.chunkIndex}: ${chunk.nodeName}`
+                ).join(', ');
+                
+                const isLocal = thisNode && (file.uploadedBy === thisNode.name || file.uploadedFrom === thisNode.url);
+                const uploaderBadgeClass = 'uploader-badge';
+                
+                return `
+                    <div class="file-item">
+                        <div class="file-header">
+                            <div class="file-info">
+                                <strong>${file.originalName}</strong> 
+                                ${fileTypeDisplay}
+                                <span class="${uploaderBadgeClass}">📤 ${file.uploadedBy} ${isLocal ? '(You)' : '(Peer)'}</span><br>
+                                <small>Size: ${formatBytes(file.size)} | Uploaded: ${new Date(file.uploadTime).toLocaleString()}</small><br>
+                                <small>Chunks: ${file.totalChunks} | File ID: ${file.id}</small>
+                                <div class="chunk-info">
+                                    <strong>Chunk Distribution:</strong> ${chunkDistribution}
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                ${isVideo ? `<button class="btn-info" onclick="streamVideo('${file.id}', '${file.originalName}')">Stream Video</button>` : ''}
+                                <button class="btn-success" onclick="downloadFile('${file.id}', '${file.originalName}')">Download</button>
+                            </div>
+                        </div>
+                        <div id="video-container-${file.id}" class="video-container" style="display: none;">
+                            <video id="video-${file.id}" class="video-player" controls>
+                                <source src="/stream/${file.id}" type="${file.mimeType}">
+                                Your browser does not support the video tag.
+                            </video>
+                        </div>
                     </div>
-                    <button onclick="downloadFile('${file.id}', '${file.originalName}')">Download</button>
-                </div>
-            `).join('');
+                `;
+            }).join('');
+        }
+
+        function streamVideo(fileId, fileName) {
+            const container = document.getElementById(`video-container-${fileId}`);
+            const video = document.getElementById(`video-${fileId}`);
+            
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                video.load();
+                showStatus(`Streaming ${fileName}...`, 'info');
+            } else {
+                container.style.display = 'none';
+                video.pause();
+            }
         }
 
         async function downloadFile(fileId, fileName) {
@@ -144,8 +373,19 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
-        // Load files on page load
+        function getFileExtension(filename) {
+            return filename.split('.').pop() || '';
+        }
+
+        // Initialize
+        refreshPeers();
         refreshFiles();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            refreshPeers();
+            refreshFiles();
+        }, 30000);
     </script>
 </body>
 </html>

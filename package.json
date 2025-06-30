@@ -1,0 +1,21 @@
+{
+  "name": "distributed-file-sharing",
+  "version": "1.0.0",
+  "description": "Distributed file sharing system with Node.js",
+  "main": "coordinator.js",
+  "scripts": {
+    "start": "node coordinator.js",
+    "coordinator": "node coordinator.js",
+     "node1": "cross-env NODE_PORT=3001 node storage-node.js",
+    "node2": "cross-env NODE_PORT=3002 node storage-node.js",
+    "node3": "cross-env NODE_PORT=3003 node storage-node.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
+  }
+}

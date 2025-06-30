@@ -1,0 +1,151 @@
+<!-- public/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed File Sharing</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .upload-area { border: 2px dashed #ccc; padding: 40px; text-align: center; margin: 20px 0; }
+        .file-list { margin: 20px 0; }
+        .file-item { padding: 10px; border: 1px solid #ddd; margin: 5px 0; display: flex; justify-content: space-between; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Distributed File Sharing System</h1>
+    
+    <div class="upload-area" id="uploadArea">
+        <p>Drag and drop files here or click to select</p>
+        <input type="file" id="fileInput" multiple style="display: none;">
+    </div>
+    
+    <div id="status"></div>
+    
+    <div class="file-list">
+        <h2>Available Files</h2>
+        <div id="filesList"></div>
+        <button onclick="refreshFiles()">Refresh Files</button>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+        const filesList = document.getElementById('filesList');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => e.preventDefault());
+        uploadArea.addEventListener('drop', handleDrop);
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const files = Array.from(e.dataTransfer.files);
+            uploadFiles(files);
+        }
+
+        function handleFileSelect(e) {
+            const files = Array.from(e.target.files);
+            uploadFiles(files);
+        }
+
+        async function uploadFiles(files) {
+            for (const file of files) {
+                await uploadFile(file);
+            }
+            refreshFiles();
+        }
+
+        async function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                showStatus(`Uploading ${file.name}...`, 'info');
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    showStatus(`${file.name} uploaded successfully!`, 'success');
+                } else {
+                    showStatus(`Upload failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`Upload error: ${error.message}`, 'error');
+            }
+        }
+
+        async function refreshFiles() {
+            try {
+                const response = await fetch('/files');
+                const data = await response.json();
+                displayFiles(data.files);
+            } catch (error) {
+                showStatus(`Failed to load files: ${error.message}`, 'error');
+            }
+        }
+
+        function displayFiles(files) {
+            filesList.innerHTML = files.map(file => `
+                <div class="file-item">
+                    <div>
+                        <strong>${file.originalName}</strong><br>
+                        <small>Size: ${formatBytes(file.size)} | Uploaded: ${new Date(file.uploadTime).toLocaleString()}</small><br>
+                        <small>Chunks: ${file.totalChunks} | File ID: ${file.id}</small>
+                    </div>
+                    <button onclick="downloadFile('${file.id}', '${file.originalName}')">Download</button>
+                </div>
+            `).join('');
+        }
+
+        async function downloadFile(fileId, fileName) {
+            try {
+                showStatus(`Downloading ${fileName}...`, 'info');
+                const response = await fetch(`/download/${fileId}`);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    showStatus(`${fileName} downloaded successfully!`, 'success');
+                } else {
+                    const error = await response.json();
+                    showStatus(`Download failed: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`Download error: ${error.message}`, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            status.innerHTML = `<div class="status ${type}">${message}</div>`;
+            setTimeout(() => status.innerHTML = '', 5000);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Load files on page load
+        refreshFiles();
+    </script>
+</body>
+</html>
